@@ -66,6 +66,10 @@ position(object('treasure map', light), 'captain room').
 position(object('forbidden room key', light), 'captain room').
 position(object(candle, light), 'captain room').
 
+% Combinations
+combination('lit candle', [candle, matches]).
+combination('loaded gun', [gun, bullets, 'gun powder']).
+
 % Extra object/room facts
 edible(bannana).
 edible(apple).
@@ -78,6 +82,19 @@ wearable('pirate clothes').
 killable(pirate).
 killable(lion).
 
+action('sharp edge', cut, rope).
+action(axe, break, door).
+action(axe, kill, pirate).
+action('pirate skeleton', scare, pirate).
+action('chest key', unlock, chest).
+action(cutlass, kill, pirate).
+action('forbidden room key', unlock, 'forbidden room').
+action('loaded gun', kill, pirate).
+action('loaded gun', kill, lion).
+action('rum bottle', kill, pirate).
+
+
+:- dynamic(container/2).
 container('fruit container', unlocked).
 container(chest, locked).
 container('armor box', unlocked).
@@ -146,7 +163,7 @@ room_entrance_condition(tavern):-
 room_entrance_condition('heavy metal dark room'):-
 	inventory(InventoryList),
 	list_check('lit candle', InventoryList),
-	speak(['Blackbeard - "Arrr!! Running Wild concert!! Aye aye!! http://youtu.be/zwnipCkNgDw "']), nl.
+	speak(['Blackbeard - "Arrr!! Running Wild concert!! Aye aye!! http://youtu.be/9Q91-999gEM "']), nl.
 room_entrance_condition('heavy metal dark room'):-
 	speak(['Blackbeard - "It''s too dark in there! I can''t see a thing!"']), !, fail.
 room_entrance_condition('forbidden room'):-
@@ -264,10 +281,24 @@ execute(unlock, chest):-
 	retract(container(chest, locked)),
 	asserta(container(chest, unlocked)),
 	speak(['Blackbeard - "Arrr! The chest has opened!"']), nl, !.
-execute(dress, _):-
+execute(dress, Clothing):-
+	wearable(Clothing),
 	clothing(ClothingList),
 	\+ list_is_empty(ClothingList),
 	speak(['Blackbeard - "Arrr! I can not wear this over what I am already wearing!"']), nl, !.
+execute(dress, Clothing):-
+	wearable(Clothing),
+	inventory(InventoryList),
+	list_check(Clothing, InventoryList),
+	list_remove(Clothing, InventoryList, NewInvList),
+	retract(inventory(_)),
+	asserta(inventory(NewInvList)),
+	clothing(ClothingList),
+	list_is_empty(ClothingList),
+	list_add(Clothing, ClothingList, NewClothingList),
+	retract(clothing(_)),
+	asserta(clothing(NewClothingList)), 
+	speak(['Blackbeard - "Arrr! That ', Clothing, ' is tight!"']), nl, !.
 execute(dress, Clothing):-
 	wearable(Clothing),
 	location(CurrentLocation),
@@ -330,23 +361,15 @@ execute(bribe, pirate):-
 	speak(['Blackbeard - "Arrr! Take this gold and get lost!"']), nl, !.
 execute(light, candle):-
 	inventory(InventoryList),
-	list_check(candle, InventoryList),
-	list_check(matches, InventoryList),
-	list_remove(candle, InventoryList, NewList),
-	list_remove(matches, NewList, FinalList),
-	list_add('lit candle', FinalList, UpdatedList),
+	combination('lit candle', ItemsList),
+	combine(InventoryList, ItemsList, UpdatedList),	
 	retract(inventory(_)),
 	asserta(inventory(UpdatedList)),
 	speak(['Blackbeard - "Arrr! The candle is now lit! Maybe I can see in dark rooms now!"']), nl, !.
 execute(load, gun):-
 	inventory(InventoryList),
-	list_check(gun, InventoryList),
-	list_check('gun powder', InventoryList),
-	list_check(bullets, InventoryList),
-	list_remove(gun, InventoryList, NewList),
-	list_remove('gun powder', NewList, NewNewList),
-	list_remove(bullets, NewNewList, FinalList),
-	list_add('loaded gun', FinalList, UpdatedList),
+	combination('loaded gun', ItemsList),
+	combine(InventoryList, ItemsList, UpdatedList),
 	retract(inventory(_)),
 	asserta(inventory(UpdatedList)),
 	speak(['Blackbeard - "Arrr! The gun is now loaded! Let the killing begin!"']), nl, !.
@@ -360,6 +383,24 @@ execute(eat, Edible):-
 	speak(['Blackbeard - "Arrr! Yuuum! I really needed that!!"']), nl, !.
 execute(Action, Object):-
 	speak(['Blackbeard - "Arrr! I can not ', Action, ' the ', Object, '!"']), nl.
+
+cheat('find room', TargetRoom):-
+	location(CurrentRoom),
+	room(TargetRoom),
+	speak(['Jolly Roger - To go to the ', TargetRoom, ' you can follow the following path(s):']),
+	print_available_paths(CurrentRoom, TargetRoom), !.
+cheat('find room', _):-
+	speak(['Jolly Roger - There is no such room here! Maybe another game?!']).
+cheat('find object', Object):-
+	position(object(Object, _), _),
+	speak(['Jolly Roger - The ', Object, ' is at the folloowing room(s): ']),
+	print_rooms(Object), !.
+cheat('find object', _):-
+	speak(['Jolly Roger - There is no such object anywhere! Maybe another game?!']).
+%cheat('find combo', Object):-
+	
+cheat('find combo', _):-
+	speak(['Jolly Roger - You can not really do anything with that! It is just there to make things a bit harder for you!!']).
 
 
 % Auxiliary methods
@@ -375,12 +416,34 @@ print_adjacent_rooms(Room):-
 	door(Room, AdjacentRoom, Status), tab(4), speak([AdjacentRoom, ' (Door is ', Status, ')']), fail.
 print_adjacent_rooms(_).
 
-% List manipulation
-list_check(Name, List):-
-	list_check0(Name, List).
+print_available_paths(CurrentRoom, TargetRoom):-
+	find_room_path(CurrentRoom, TargetRoom, Path),
+	print_path(Path), fail.
+print_available_paths(_, _).
 
-list_check0(Name, [Name|_]).
-list_check0(Name, [_|T]):- list_check0(Name, T).
+print_path([H|[]]):- write(H), nl, !.
+print_path([H|T]):-
+	write(H), write(' --> '),
+	print_path(T).
+
+print_rooms(Object):-
+	position(object(Object, Size), Room),
+	\+ container(Room, _),
+	write('    '), write(Room), write(' ('), write(Size), write(')'), nl, fail.
+print_rooms(Object):-
+	position(object(Object, Size), Container),
+	position(object(Container, _), Room),
+	write('    '), write(Container), write(' which is in the '), write(Room), write(' ('), write(Size), write(')'), nl, fail.
+print_rooms(_).
+
+% List manipulation
+list_check(Name, [Name|_]).
+list_check(Name, [_|T]):- list_check(Name, T).
+
+list_match([], _).
+list_match([ItemsH|ItemsT], List):-
+	list_check(ItemsH, List),
+	list_match(ItemsT, List).
 
 list_add(Name, OldList, NewList):-
 	NewList = [Name|OldList].
@@ -393,7 +456,16 @@ list_remove0(Name, [Name|Rest], Rest).
 list_remove0(Name, [H|Rest], [H|T]):-
 	list_remove0(Name, Rest, T).
 
+list_remove_list([], NewList, NewList).
+list_remove_list([ItemsH|ItemsT], List, UpdatedList):-
+	list_remove(ItemsH, List, NewList),
+	list_remove_list(ItemsT, NewList, UpdatedList).
+
 list_is_empty([]).
+
+list_reverse(List, NewList):- list_reverse(List, [], NewList).
+list_reverse([], Acc, Acc).
+list_reverse([H|T], Acc, NewList):- list_reverse(T, [H|Acc], NewList).
 
 % Misc
 add_objects_to_location(Container):-
@@ -408,3 +480,19 @@ unlock_door(Room1,Room2):-
 	retract(door(Room2, Room1, locked)),
 	asserta(door(Room1, Room2, unlocked)),
 	asserta(door(Room2, Room1, unlocked)).
+
+combine(InventoryList, ItemsList, UpdatedList):-
+	list_match(ItemsList, InventoryList),
+	list_remove_list(ItemsList, InventoryList, NewInvList),
+	combination(CombinedObj, ItemsList),
+	list_add(CombinedObj, NewInvList, UpdatedList).
+
+find_room_path(CurrentRoom, TargetRoom, FinalPath):-
+	find_room_path0(CurrentRoom, TargetRoom, [CurrentRoom], Path),
+	list_reverse(Path, FinalPath).
+
+find_room_path0(TargetRoom, TargetRoom, Visited, Visited).
+find_room_path0(CurrentRoom, TargetRoom, Visited, Path):-
+	door(CurrentRoom, AdjacentRoom, _),
+	\+ list_check(AdjacentRoom, Visited),
+	find_room_path0(AdjacentRoom, TargetRoom, [AdjacentRoom|Visited], Path).

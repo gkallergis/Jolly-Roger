@@ -35,9 +35,9 @@ door(lounge, exit, locked).
 % Objects & Characters
 :- dynamic(position/2).
 
-position(character(pirate, alive), tavern).
-position(character(lion, alive), 'forbidden room').
-position(character(pirate, alive), lounge).
+position(character(pirate, 'deck boy', alive), tavern).
+position(character(lion, guard, alive), 'forbidden room').
+position(character(pirate, pianist, alive), lounge).
 
 position(object('sharp edge', heavy), jail).
 position(object('rum bottle', light), jail).
@@ -79,8 +79,15 @@ edible(rum).
 wearable('pirate skeleton').
 wearable('pirate clothes').
 
-killable(pirate).
-killable(lion).
+scareable('deck boy').
+
+killable(pianist).
+killable('deck boy').
+killable(guard).
+
+animal(lion).
+
+distracted(pianist).
 
 action('sharp edge', cut, rope).
 action(axe, break, door).
@@ -124,10 +131,42 @@ move(Room):-
 	location(CurrentLocation), !,
 	door_unlocked(CurrentLocation, Room), !,
 	room_entrance_condition(Room),
+	transit(Room, CurrentLocation).
+
+transit(Room, CurrentLocation):-
+	room_entry_action(Room),
 	retract(location(CurrentLocation)),
 	asserta(location(Room)),
 	speak(['You walked into the ', Room, '!']),
 	look_around, !.
+
+room_entry_action(tavern):-
+	position(character(pirate, 'deck boy', alive), tavern),
+	retract(position(character(pirate, 'deck boy', alive), tavern)),
+	asserta(position(character(pirate, 'deck boy', dead), tavern)),
+	speak(['Blackbeard - "Arrr!"']),
+	speak(['Pirate - "Aaaaaaa...*splash*!"']),
+	speak(['Blackbeard - "Oh, that guy was scared!"']), nl.
+room_entry_action('heavy metal dark room'):-
+	speak(['Blackbeard - "Arrr!! Running Wild concert!! Aye aye!! http://youtu.be/9Q91-999gEM "']), nl.
+room_entry_action('forbidden room'):-
+	position(character(lion, guard, alive), 'forbidden room'),
+	retract(position(character(lion, guard, alive), 'forbidden room')),
+	asserta(position(character(lion, guard, dead), 'forbidden room')),
+	speak(['* Bang Bang *']),
+	speak(['Lion - Roooooooar...* dap *!']),
+	speak(['Blackbeard - "Arrr!! That was messy!"']), nl.
+room_entry_action(lounge):-
+	position(character(pirate, pianist, alive), lounge),
+	speak(['Pianist pirate singing']),
+	speak(['"Rising the flag on the masthead']),
+	speak(['The sails and the ropes'' holding tight']),
+	speak(['The gunners are eager to fire']),
+	speak(['Well prepared for the fight"']),
+	speak(['Blackbeard - "Arrrr!! A piano player! He is too distracted, but I''d better keep an eye on him though..."']), nl.
+room_entry_action(exit):-
+	speak(['Blackbeard - "Arrrrrrrrrrrrrrrrrrr!!"']), nl.
+room_entry_action(_).
 
 room_exists(Room):-
 	room(Room).
@@ -144,59 +183,49 @@ door_unlocked(CurrentLocation, CurrentLocation):-
 door_unlocked(CurrentLocation, Room):-
 	speak(['You can not get to the ', Room, ' from the ', CurrentLocation, '!']), fail.
 
-room_entrance_condition(corridor):-
+room_entrance_condition(_):-
 	jail_assets(JailList),
 	list_check('rope', JailList),
 	speak(['Blackbeard - "I think I can''t do much with my hands tied, can I?!"']), !, fail.
-room_entrance_condition(tavern):-
-	position(character(pirate, alive), tavern),
+room_entrance_condition(Room):-
+	position(character(Character, Role, alive), Room),
+	animal(Character),
+	\+ equiped(Role),
+	speak(['Blackbeard - "Arrr!! There is a ', Character, ' guarding that room, I need to get rid of it somehow!"']), !, fail.
+room_entrance_condition(Room):-
+	position(character(_, Role, alive), Room),
+	scareable(Role),
 	clothing(ClothingList),
 	\+ list_check('pirate skeleton', ClothingList),
 	speak(['Blackbeard - "I think there is someone in there! I better not go in unprepared!"']), !, fail.
-room_entrance_condition(tavern):-
-	position(character(pirate, alive), tavern),
-	retract(position(character(pirate, alive), tavern)),
-	asserta(position(character(pirate, dead), tavern)),
-	speak(['Blackbeard - "Arrr!"']),
-	speak(['Pirate - "Aaaaaaa...*splash*!"']),
-	speak(['Blackbeard - "Oh, that guy was scared!"']), nl.
-room_entrance_condition('heavy metal dark room'):-
-	inventory(InventoryList),
-	list_check('lit candle', InventoryList),
-	speak(['Blackbeard - "Arrr!! Running Wild concert!! Aye aye!! http://youtu.be/9Q91-999gEM "']), nl.
-room_entrance_condition('heavy metal dark room'):-
-	speak(['Blackbeard - "It''s too dark in there! I can''t see a thing!"']), !, fail.
-room_entrance_condition('forbidden room'):-
-	position(character(lion, alive), 'forbidden room'),
-	inventory(InventoryList),
-	\+ list_check('loaded gun', InventoryList),
-	speak(['Blackbeard - "Arrr!! There is a lion guarding the treasure, I need to get rid of it somehow!"']), !, fail.
-room_entrance_condition('forbidden room'):-
-	position(character(lion, alive), 'forbidden room'),
-	retract(position(character(lion, alive), 'forbidden room')),
-	asserta(position(character(lion, dead), 'forbidden room')),
-	speak(['* Bang Bang *']),
-	speak(['Lion - Roooooooar...* dap *!']),
-	speak(['Blackbeard - "Arrr!! That was messy!"']), nl.
-room_entrance_condition(lounge):-
-	position(character(pirate, alive), lounge),
-	clothing(ClothingList),
-	\+ list_check('pirate clothes', ClothingList),
+room_entrance_condition(Room):-
+	position(character(_, Role, alive), Room),
+	killable(Role),
+	not(distracted(Role)),
+	\+ equiped(Role),
+	speak(['Blackbeard - "I think someone is in there! I better not go in unprepared!"']), !, fail.
+room_entrance_condition(Room):-
+	position(character(_, Role, alive), Room),
+	killable(Role),
+	distracted(Role),
+	\+ equiped(Role),
 	speak(['Blackbeard - "Arrr!! The pianist will get me if I go in there looking like that!"']), !, fail.
-room_entrance_condition(lounge):-
-	position(character(pirate, alive), lounge),
-	clothing(ClothingList),
-	list_check('pirate clothes', ClothingList),
-	speak(['Pianist pirate singing']),
-	speak(['"Rising the flag on the masthead']),
-	speak(['The sails and the ropes'' holding tight']),
-	speak(['The gunners are eager to fire']),
-	speak(['Well prepared for the fight"']),
-	speak(['Blackbeard - "Arrrr!! A piano player! He is too distracted, but I''d better keep an eye on him though..."']), nl.
-room_entrance_condition(exit):-
-	speak(['Blackbeard - "Arrrrrrrrrrrrrrrrrrr!!"']), nl.
+room_entrance_condition(Room):-
+	dark(Room),
+	inventory(InventoryList),
+	\+ list_check('lit candle', InventoryList),
+	speak(['Blackbeard - "It''s too dark in there! I can''t see a thing!"']), !, fail.
 room_entrance_condition(_).
 
+equiped(pianist):-
+	clothing(ClothingList),
+	list_check('pirate clothes', ClothingList).
+equiped(guard):-
+	inventory(InventoryList),
+	list_check('loaded gun', InventoryList).
+equiped('deck boy'):-
+	clothing(ClothingList),
+	list_check('pirate skeleton', ClothingList).
 
 % Looking around
 look_around:-
@@ -327,14 +356,14 @@ execute(unlock, 'forbidden room'):-
 	speak(['Blackbeard - "Arrr! The door is now unlocked!"']), nl, !.
 execute(break, exit):-
 	location(lounge),
-	position(character(pirate, dead), lounge),
+	position(character(pirate, pianist, dead), lounge),
 	inventory(InventoryList),
 	list_check('axe', InventoryList),
 	unlock_door(lounge, exit),
 	speak(['Blackbeard - "Arrr! The door is now broken! Time to get my revenge! Let''s go up!"']), nl, !.
 execute(break, exit):-
 	location(lounge),
-	position(character(pirate, alive), lounge),
+	position(character(pirate, pianist, alive), lounge),
 	inventory(InventoryList),
 	list_check('axe', InventoryList),
 	unlock_door(lounge, exit),
@@ -342,22 +371,22 @@ execute(break, exit):-
 	speak(['Pianist - "Not so fast! * crash *!"']), nl, !.
 execute(kill, pirate):-
 	location(CurrentLocation),
-	position(character(pirate, alive), CurrentLocation),
+	position(character(pirate, Role, alive), CurrentLocation),
 	inventory(InventoryList),
 	(list_check('rum bottle', InventoryList); list_check('loaded gun', InventoryList); list_check('cutlass', InventoryList); list_check('axe', InventoryList)),
-	retract(position(character(pirate, alive), CurrentLocation)),
-	asserta(position(character(pirate, dead), CurrentLocation)),
+	retract(position(character(pirate, Role, alive), CurrentLocation)),
+	asserta(position(character(pirate, Role, dead), CurrentLocation)),
 	speak(['Blackbeard - "Arrr! Diiiiiiiiiiie!"']), nl, !.
 execute(bribe, pirate):-
 	location(CurrentLocation),
-	position(character(pirate, alive), CurrentLocation),
+	position(character(pirate, Role, alive), CurrentLocation),
 	inventory(InventoryList),
 	list_check('gold', InventoryList),
 	list_remove('gold', InventoryList, NewList),
 	retract(inventory(_)),
 	asserta(inventory(NewList)),
-	retract(position(character(pirate, alive), CurrentLocation)),
-	asserta(position(character(pirate, dead), CurrentLocation)),
+	retract(position(character(pirate, Role, alive), CurrentLocation)),
+	asserta(position(character(pirate, Role, dead), CurrentLocation)),
 	speak(['Blackbeard - "Arrr! Take this gold and get lost!"']), nl, !.
 execute(light, candle):-
 	inventory(InventoryList),

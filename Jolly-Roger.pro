@@ -2,17 +2,17 @@
 
 % Logicbae
 % Deck rooms
-room(jail).
-room(corridor).
-room('death room').
-room(tavern).
-room('pirate museum').
-room('forbidden room').
-room('weapon room').
-room('captain room').
-room('lounge').
-room('heavy metal dark room').
-room('exit').
+room(jail, 'Try cutting the rope with the sharp edge on the wall!').
+room(corridor, 'Unlock the chest if you have the key (check at another room maybe?)').
+room('death room', 'A pirate skeleton can scare someone, right?').
+room(tavern, 'You can eat some fruits! Vitamins are good for you!').
+room('pirate museum', 'If you wear a pirate outfit you might look like the others! Interesting!').
+room('forbidden room', 'A key is in here, right? I wonder!').
+room('weapon room', 'Maybe you should protect yourself, you never know what you might find in your way!').
+room('captain room', 'Lots of stuff in here, but few of real value!').
+room('lounge', 'Pirates are greedy for money! Although you are also heavyly armed! Hmmm!').
+room('heavy metal dark room', 'Enjoy the music!').
+room('exit', 'Just go up! Time to reclaim your ship! Wait for Jolly Roger 2!').
 
 % Door connections
 :- dynamic(door/3).
@@ -113,7 +113,7 @@ dark('heavy metal dark room').
 location(jail).
 
 :- dynamic(inventory/1).
-inventory([]).
+inventory([candle, matches, gun, 'gun powder', bullets, toilet]).
 
 :- dynamic(clothing/1).
 clothing([]).
@@ -169,7 +169,7 @@ room_entry_action(exit):-
 room_entry_action(_).
 
 room_exists(Room):-
-	room(Room).
+	room(Room, _).
 room_exists(_):-
 	speak(['There is no such room!']), fail.
 
@@ -413,9 +413,10 @@ execute(eat, Edible):-
 execute(Action, Object):-
 	speak(['Blackbeard - "Arrr! I can not ', Action, ' the ', Object, '!"']), nl.
 
+% Cheats!!
 cheat('find room', TargetRoom):-
 	location(CurrentRoom),
-	room(TargetRoom),
+	room(TargetRoom, _),
 	speak(['Jolly Roger - To go to the ', TargetRoom, ' you can follow the following path(s):']),
 	print_available_paths(CurrentRoom, TargetRoom), !.
 cheat('find room', _):-
@@ -426,11 +427,20 @@ cheat('find object', Object):-
 	print_rooms(Object), !.
 cheat('find object', _):-
 	speak(['Jolly Roger - There is no such object anywhere! Maybe another game?!']).
-%cheat('find combo', Object):-
-	
+cheat('find combo', Object):-
+	position(object(Object, _), _),
+	item_combo(_, Object),
+	speak(['Jolly Roger - You can do the following things with the ', Object, ':']),
+	print_item_combo(Object), !.
+cheat('find combo', Object):-
+	position(object(Object, _), _),
+	speak(['Jolly Roger - You can not really do anything with that! It is just there to make things a bit harder for you!!']), !.
 cheat('find combo', _):-
-	speak(['Jolly Roger - You can not really do anything with that! It is just there to make things a bit harder for you!!']).
-
+	speak(['Jolly Roger - That object does not exist here! Maybe another game?!']).
+cheat('hint'):-
+	location(CurrentLocation),
+	room(CurrentLocation, Hint),
+	speak(['Jolly Roger - You are in the ', CurrentLocation, '! ', Hint]).
 
 % Auxiliary methods
 % User output
@@ -464,6 +474,12 @@ print_rooms(Object):-
 	position(object(Container, _), Room),
 	write('    '), write(Container), write(' which is in the '), write(Room), write(' ('), write(Size), write(')'), nl, fail.
 print_rooms(_).
+
+print_item_combo(Object):-
+	item_combo(Combination, Object),
+	[Combo|_] = Combination,
+	write('    '), write(Combo), nl, fail.
+print_item_combo(_).
 
 % List manipulation
 list_check(Name, [Name|_]).
@@ -525,3 +541,25 @@ find_room_path0(CurrentRoom, TargetRoom, Visited, Path):-
 	door(CurrentRoom, AdjacentRoom, _),
 	\+ list_check(AdjacentRoom, Visited),
 	find_room_path0(AdjacentRoom, TargetRoom, [AdjacentRoom|Visited], Path).
+
+item_combo(Combination, Item):-
+	length(Combination, 1),
+	gen_combination(Combination),
+	is_set(Combination),
+	[Comb|_] = Combination,
+	combination(Comb, CombinationList),
+	list_check(Item, CombinationList).
+
+possible_combo(Combination):-
+	length(Combination, 1),
+	gen_combination(Combination),
+	is_set(Combination),
+	[Comb|_] = Combination,
+	combination(Comb, CombinationList),
+	inventory(InventoryList),
+	list_match(CombinationList, InventoryList).
+
+gen_combination([]).
+gen_combination([X|Xs]):-
+    combination(X, _),
+    gen_combination(Xs).

@@ -2,7 +2,7 @@
 
 % Logicbae
 % Deck rooms
-room(jail, 'Try cutting the rope with the sharp edge on the wall!').
+room(jail, 'Try cutting the rope with the sharp edge on the wall! If you have done so already, try moving on!').
 room(corridor, 'Unlock the chest if you have the key (check at another room maybe?)').
 room('death room', 'A pirate skeleton can scare someone, right?').
 room(tavern, 'You can eat some fruits! Vitamins are good for you!').
@@ -15,22 +15,22 @@ room('heavy metal dark room', 'Enjoy the music!').
 room('exit', 'Just go up! Time to reclaim your ship! Wait for Jolly Roger 2!').
 
 % Door connections
-:- dynamic(door/3).
+:- dynamic(door/4).
 
-door(jail, corridor, unlocked).
-door(corridor, 'death room', unlocked).
-door('death room', tavern, unlocked).
-door(tavern, 'pirate museum', unlocked).
-door(tavern, 'heavy metal dark room', unlocked).
-door(tavern, 'weapon room', unlocked).
-door('weapon room', 'captain room', unlocked).
-door('captain room', lounge, unlocked).
-door('pirate museum', 'heavy metal dark room', unlocked).
-door('heavy metal dark room', 'forbidden room', locked).
-door('heavy metal dark room', lounge, unlocked).
-door(lounge, exit, locked).
+door(jail, corridor, unlocked, 'jail key').
+door(corridor, 'death room', unlocked, 'death room key').
+door('death room', tavern, unlocked, 'tavern key').
+door(tavern, 'pirate museum', unlocked, 'pirate museum key').
+door(tavern, 'heavy metal dark room', unlocked, 'heavy metal dark room key').
+door(tavern, 'weapon room', unlocked, 'weapon room key').
+door('weapon room', 'captain room', unlocked, 'captin room key').
+door('captain room', lounge, unlocked, 'lounge key').
+door('pirate museum', 'heavy metal dark room', unlocked, 'heavy metal dark room key').
+door('heavy metal dark room', 'forbidden room', locked, 'forbidden room key').
+door('heavy metal dark room', lounge, unlocked, 'lounge key').
+door(lounge, exit, locked, '').
 
-:- forall(door(X,Y,Z), assert(door(Y,X,Z))).
+:- forall(door(X,Y,Z,W), assert(door(Y,X,Z,W))).
 
 % Objects & Characters
 :- dynamic(position/2).
@@ -65,6 +65,7 @@ position(object(matches, light), 'captain room').
 position(object('treasure map', light), 'captain room').
 position(object('forbidden room key', light), 'captain room').
 position(object(candle, light), 'captain room').
+position(object('hand rope', light), captain).
 
 % Combinations
 combination('lit candle', [candle, matches]).
@@ -79,6 +80,8 @@ edible(rum).
 wearable('pirate skeleton').
 wearable('pirate clothes').
 
+cutable('hand rope').
+
 scareable('deck boy').
 
 killable(pianist).
@@ -89,42 +92,100 @@ animal(lion).
 
 distracted(pianist).
 
-action('sharp edge', cut, rope).
-action(axe, break, door).
-action(axe, kill, pirate).
-action('pirate skeleton', scare, pirate).
-action('chest key', unlock, chest).
-action(cutlass, kill, pirate).
-action('forbidden room key', unlock, 'forbidden room').
-action('loaded gun', kill, pirate).
-action('loaded gun', kill, lion).
-action('rum bottle', kill, pirate).
 
-
-:- dynamic(container/2).
-container('fruit container', unlocked).
-container(chest, locked).
-container('armor box', unlocked).
+:- dynamic(container/3).
+container('fruit container', unlocked, 'fruit container key').
+container(chest, locked, 'chest key').
+container('armor box', unlocked, 'armor box key').
 
 dark('heavy metal dark room').
 
 % Character info
 :- dynamic(location/1).
-location(jail).
+location('heavy metal dark room').
 
 :- dynamic(inventory/1).
-inventory([candle, matches, gun, 'gun powder', bullets, toilet]).
+inventory(['chest key', 'forbidden room key']).
 
 :- dynamic(clothing/1).
 clothing([]).
 
-:- dynamic(jail_assets/1).
-jail_assets(['rope']).
+% Game start
+play:-
+	write('Jolly Roger - A Pirate''s Story'),nl,
+	write('Course Project by Georgios Kallergis (geokal@kth.se) & Thomas Fattal (tfattal@kth.se)'),nl,
+	write('Released under the creative commons Attribution-ShareAlike 3.0 Unported license'),nl,
+	nl,
+	write('Captain Blackbeard was roaming the seas of the Caribean.'),nl,
+	write('Being the richest pirate the surface of creation has ever seen,'),nl,
+	write('he became arrogant and treated his crew in a bad way.'),nl,
+	nl,
+	write('One night, the crew turned against him, captured him and'),nl,
+	write('locked him into the jail on the ship cellar. Everyday'),nl,
+	write('they bring food to their old captain but he can not go outside'),nl,
+	write('anymore.'),nl,
+	nl,
+	write('Ever since he was captured he was planning his revenge.'),nl,
+	write('The day that he will rule the seas will come again and'),nl,
+	write('everyone will pay for betraying him. Captain Blackbeard is'),nl,
+	write('you. Today, the deck boy that braught you food forgot to lock the'),nl,
+	write('jail door. This is your chance! Will you make it to the deck'),nl,
+	write('and reclaim your ship? '),nl,
+	nl,
+	write('(Use natural language to execute actions in the game.)'),nl,nl,
+	loop.
+
+% Game loop and command calling
+loop:-
+	repeat,
+	prompt_input(InputList),
+	parse_command(InputList, Command),
+	execute(Command),
+	finished(InputList), !.
+
+execute(end):- !.
+execute(quit):- !.
+execute(avast):- !.
+execute(Command):- call(Command), !.
+
+prompt_input(InputList):-
+	ansi_format([bold, fg(green)], '[~w@ship]# ', ['Jolly-Roger']),
+	read_line_to_codes(user_input, UserSentenceASCIICodes),
+	remove_special_chars(UserSentenceASCIICodes, FilteredList),
+	string_to_atom(FilteredList, Atom),
+	atomic_list_concat(InputList,' ',Atom), !.
+
+parse_command(InputList, Command):-
+	nlp_command(InputList, OutputList),
+	Command =.. OutputList, !.
+
+finished(InputList):-
+	[I|_] = InputList,
+	(I == end; I == quit; I == avast), !.
+
+remove_special_chars(ASCIIList, FilteredList):-
+	remove_special_chars(ASCIIList, [], RevFilteredList), !,
+	list_reverse(RevFilteredList, FilteredList).
+
+remove_special_chars([], Acc, Acc):- !.
+remove_special_chars([H|T], FilteredList, Acc):-
+	(H >= 0'a, H =< 0'z; H == 32),
+	remove_special_chars(T, [H|FilteredList], Acc).
+remove_special_chars([H|T], FilteredList, Acc):-
+	H >= 0'A, H =< 0'Z,
+	N is H + 32,
+	remove_special_chars(T, [N|FilteredList], Acc).
+remove_special_chars([_|T], FilteredList, Acc):-
+	remove_special_chars(T, FilteredList, Acc).
+
+% NLP
+nlp_command(InputList, OutputList):-
+	OutputList = InputList.
 
 % Gameplay!
 % Moving around
 move(Container):-
-	container(Container, _),
+	container(Container, _, _),
 	speak(['Are you out of your mind?! What are you going to do in the ', Container, '?!']), !, fail.
 move(Room):-
 	room_exists(Room),
@@ -174,9 +235,9 @@ room_exists(_):-
 	speak(['There is no such room!']), fail.
 
 door_unlocked(CurrentLocation, Room):-
-	door(CurrentLocation, Room, unlocked).
+	door(CurrentLocation, Room, unlocked, _).
 door_unlocked(CurrentLocation, Room):-
-	door(CurrentLocation, Room, locked),
+	door(CurrentLocation, Room, locked, _),
 	speak(['The door is locked, maybe you can use something to unlock it!']), !, fail.
 door_unlocked(CurrentLocation, CurrentLocation):-
 	speak(['You are already there!']), !, fail.
@@ -184,8 +245,8 @@ door_unlocked(CurrentLocation, Room):-
 	speak(['You can not get to the ', Room, ' from the ', CurrentLocation, '!']), fail.
 
 room_entrance_condition(_):-
-	jail_assets(JailList),
-	list_check('rope', JailList),
+	inventory(InventoryList),
+	list_check('hand rope', InventoryList),
 	speak(['Blackbeard - "I think I can''t do much with my hands tied, can I?!"']), !, fail.
 room_entrance_condition(Room):-
 	position(character(Character, Role, alive), Room),
@@ -243,7 +304,7 @@ list_room_items(_):-
 
 
 % Interacting with objects
-get_object(Name):-
+get(Name):-
 	location(CurrentLocation),
 	position(object(Name, light), CurrentLocation),
 	retract(position(object(Name, _), CurrentLocation)),
@@ -251,71 +312,86 @@ get_object(Name):-
 	list_add(Name, OldList, NewList),
 	retract(inventory(_)),
 	asserta(inventory(NewList)), !.
-get_object(Name):-
+get(Name):-
 	location(CurrentLocation),
 	position(object(Name, heavy), CurrentLocation),
 	speak(['The object is too heavy to pick!']), !.
-get_object(_):-
+get(_):-
 	speak(['There is no such object in here!']).
 
-put_object(Name):-
+put(Name):-
 	location(CurrentLocation),
 	inventory(OldList),
 	list_remove(Name, OldList, NewList),
 	retract(inventory(_)),
 	asserta(inventory(NewList)),
 	asserta(position(object(Name, light), CurrentLocation)), !.
-put_object(_):-
+put(_):-
 	speak(['There is no such object in your inventory!']).
 
-inspect_object(Container):-
+inspect(Container):-
 	location(CurrentLocation),
 	position(object(Container, _), CurrentLocation),
-	container(Container, unlocked),
+	container(Container, unlocked, _),
 	position(object(_, _), Container),
 	speak(['In the ', Container, ' you can find:']),
 	print_items(Container),
 	add_objects_to_location(Container), !.
-inspect_object(Container):-
+inspect(Container):-
 	location(CurrentLocation),
 	position(object(Container, _), CurrentLocation),
-	container(Container, unlocked),
+	container(Container, unlocked, _),
 	\+ position(object(_, _), Container),
 	speak(['The ', Container, ' is now empty!']), !.
-inspect_object(Container):-
+inspect(Container):-
 	location(CurrentLocation),
 	position(object(Container, _), CurrentLocation),
-	container(Container, locked),
+	container(Container, locked, _),
 	speak(['The ', Container, ' is locked, you can not look inside of it!']), !.
-inspect_object(Name):-
+inspect(Name):-
 	location(CurrentLocation),
 	position(object(Name, _), CurrentLocation),
-	\+ container(Name, _),
+	\+ container(Name, _, _),
 	speak(['There is nothing to inspect on ', Name, '! It is just a ', Name, '!']), !.
-inspect_object(_):-
+inspect(_):-
 	speak(['There is no such object in this room!']).
 
-execute(cut, 'rope'):-
-	location(jail),
-	jail_assets(JailList),
-	list_check('rope', JailList),
-	list_remove('rope', JailList, NewList),
-	retract(jail_assets(_)),
-	asserta(jail_assets(NewList)),
-	speak(['Blackbeard - "Arrr! I''m free! I have to get back to the deck and reclaim my ship! Arrr!"']), nl, !.
-execute(unlock, chest):-
-	location(corridor),
+cut(Object):-
+	cutable(Object),
 	inventory(InventoryList),
-	list_check('chest key', InventoryList),
-	retract(container(chest, locked)),
-	asserta(container(chest, unlocked)),
-	speak(['Blackbeard - "Arrr! The chest has opened!"']), nl, !.
-execute(dress, Clothing):-
+	list_check(Object, InventoryList),
+	list_remove(Object, InventoryList, NewInvList),
+	retract(inventory(_)),
+	asserta(inventory(NewInvList)),
+	speak(['Blackbeard - "Arrr! I just cut my ', Object, '!"']), nl, !.
+cut(Object):-
+	speak(['Blackbeard - "Arrr! I can not cut the ', Object, '!"']), nl.
+
+unlock(Container):-
+	container(Container, locked, Key),
+	location(CurrentLocation),
+	position(object(Container, _), CurrentLocation),
+	inventory(InventoryList),
+	list_check(Key, InventoryList),
+	retract(container(Container, locked, Key)),
+	asserta(container(Container, unlocked, Key)),
+	speak(['Blackbeard - "Arrr! The ', Container, ' has opened!"']), nl, !.
+unlock(Door):-
+	location(CurrentLocation),
+	door(Door, CurrentLocation, locked, Key),
+	inventory(InventoryList),
+	list_check(Key, InventoryList),
+	unlock_door(Door, CurrentLocation),
+	speak(['Blackbeard - "Arrr! The door is now unlocked!"']), nl, !.
+unlock(Thing):-
+	speak(['Blackbeard - "Arrr! I can not unlock the ', Thing, '! Are you sure you are next to a locked door?!"']), nl.
+
+dress(Clothing):-
 	wearable(Clothing),
 	clothing(ClothingList),
 	\+ list_is_empty(ClothingList),
 	speak(['Blackbeard - "Arrr! I can not wear this over what I am already wearing!"']), nl, !.
-execute(dress, Clothing):-
+dress(Clothing):-
 	wearable(Clothing),
 	inventory(InventoryList),
 	list_check(Clothing, InventoryList),
@@ -328,7 +404,7 @@ execute(dress, Clothing):-
 	retract(clothing(_)),
 	asserta(clothing(NewClothingList)), 
 	speak(['Blackbeard - "Arrr! That ', Clothing, ' is tight!"']), nl, !.
-execute(dress, Clothing):-
+dress(Clothing):-
 	wearable(Clothing),
 	location(CurrentLocation),
 	position(object(Clothing, light), CurrentLocation),
@@ -339,7 +415,10 @@ execute(dress, Clothing):-
 	asserta(clothing(NewList)),
 	retract(position(object(Clothing, light), CurrentLocation)),
 	speak(['Blackbeard - "Arrr! That ', Clothing, ' is tight!"']), nl, !.
-execute(undress, Clothing):-
+dress(Object):-
+	speak(['Blackbeard - "Arrr! I can not dress myself with the ', Object, '!"']), nl.
+
+undress(Clothing):-
 	location(CurrentLocation),
 	clothing(ClothingList),
 	list_check(Clothing, ClothingList),
@@ -348,20 +427,17 @@ execute(undress, Clothing):-
 	asserta(clothing(NewList)),
 	asserta(position(object(Clothing, light), CurrentLocation)),
 	speak(['Blackbeard - "Arrr! Now I am shy!"']), nl, !.
-execute(unlock, 'forbidden room'):-
-	location('heavy metal dark room'),
-	inventory(InventoryList),
-	list_check('forbidden room key', InventoryList),
-	unlock_door('heavy metal dark room', 'forbidden room'),
-	speak(['Blackbeard - "Arrr! The door is now unlocked!"']), nl, !.
-execute(break, exit):-
+undress(Object):-
+	speak(['Blackbeard - "Arrr! I can not get this away from me! I am not wearing a ', Object, '!"']), nl.
+
+break(exit):-
 	location(lounge),
 	position(character(pirate, pianist, dead), lounge),
 	inventory(InventoryList),
 	list_check('axe', InventoryList),
 	unlock_door(lounge, exit),
 	speak(['Blackbeard - "Arrr! The door is now broken! Time to get my revenge! Let''s go up!"']), nl, !.
-execute(break, exit):-
+break(exit):-
 	location(lounge),
 	position(character(pirate, pianist, alive), lounge),
 	inventory(InventoryList),
@@ -369,7 +445,10 @@ execute(break, exit):-
 	unlock_door(lounge, exit),
 	speak(['Blackbeard - "Arrr! The door is now broken! Time to get my revenge! Let''s go up!"']),
 	speak(['Pianist - "Not so fast! * crash *!"']), nl, !.
-execute(kill, pirate):-
+break(Object):-
+	speak(['Blackbeard - "Arrr! I can not break the ', Object, '!"']), nl.
+
+kill(pirate):-
 	location(CurrentLocation),
 	position(character(pirate, Role, alive), CurrentLocation),
 	inventory(InventoryList),
@@ -377,7 +456,11 @@ execute(kill, pirate):-
 	retract(position(character(pirate, Role, alive), CurrentLocation)),
 	asserta(position(character(pirate, Role, dead), CurrentLocation)),
 	speak(['Blackbeard - "Arrr! Diiiiiiiiiiie!"']), nl, !.
-execute(bribe, pirate):-
+kill(Object):-
+	speak(['Blackbeard - "Arrr! I can not kill the ', Object, '!"']), nl.
+
+
+bribe(pirate):-
 	location(CurrentLocation),
 	position(character(pirate, Role, alive), CurrentLocation),
 	inventory(InventoryList),
@@ -388,21 +471,30 @@ execute(bribe, pirate):-
 	retract(position(character(pirate, Role, alive), CurrentLocation)),
 	asserta(position(character(pirate, Role, dead), CurrentLocation)),
 	speak(['Blackbeard - "Arrr! Take this gold and get lost!"']), nl, !.
-execute(light, candle):-
+bribe(Object):-
+	speak(['Blackbeard - "Arrr! I can not bribe the ', Object, '!"']), nl.
+
+light(candle):-
 	inventory(InventoryList),
 	combination('lit candle', ItemsList),
 	combine(InventoryList, ItemsList, UpdatedList),	
 	retract(inventory(_)),
 	asserta(inventory(UpdatedList)),
 	speak(['Blackbeard - "Arrr! The candle is now lit! Maybe I can see in dark rooms now!"']), nl, !.
-execute(load, gun):-
+light(Object):-
+	speak(['Blackbeard - "Arrr! I can not light the ', Object, '!"']), nl.
+
+load(gun):-
 	inventory(InventoryList),
 	combination('loaded gun', ItemsList),
 	combine(InventoryList, ItemsList, UpdatedList),
 	retract(inventory(_)),
 	asserta(inventory(UpdatedList)),
 	speak(['Blackbeard - "Arrr! The gun is now loaded! Let the killing begin!"']), nl, !.
-execute(eat, Edible):-
+load(Object):-
+	speak(['Blackbeard - "Arrr! I can not load the ', Object, '!"']), nl.
+
+eat(Edible):-
 	edible(Edible),
 	inventory(InventoryList),
 	list_check(Edible, InventoryList),
@@ -410,37 +502,41 @@ execute(eat, Edible):-
 	retract(inventory(_)),
 	asserta(inventory(UpdatedList)),
 	speak(['Blackbeard - "Arrr! Yuuum! I really needed that!!"']), nl, !.
-execute(Action, Object):-
-	speak(['Blackbeard - "Arrr! I can not ', Action, ' the ', Object, '!"']), nl.
+eat(Object):-
+	speak(['Blackbeard - "Arrr! I can not eat the ', Object, '!"']), nl.
 
 % Cheats!!
-cheat('find room', TargetRoom):-
+find(Room):-
 	location(CurrentRoom),
-	room(TargetRoom, _),
-	speak(['Jolly Roger - To go to the ', TargetRoom, ' you can follow the following path(s):']),
-	print_available_paths(CurrentRoom, TargetRoom), !.
-cheat('find room', _):-
-	speak(['Jolly Roger - There is no such room here! Maybe another game?!']).
-cheat('find object', Object):-
+	room(Room, _),
+	speak(['Jolly Roger - To go to the ', Room, ' you can follow the following path(s):']),
+	print_available_paths(CurrentRoom, Room), !.
+find(Object):-
 	position(object(Object, _), _),
-	speak(['Jolly Roger - The ', Object, ' is at the folloowing room(s): ']),
+	speak(['Jolly Roger - The ', Object, ' is at the following room(s): ']),
 	print_rooms(Object), !.
-cheat('find object', _):-
-	speak(['Jolly Roger - There is no such object anywhere! Maybe another game?!']).
-cheat('find combo', Object):-
+find(Thing):-
+	speak(['Jolly Roger - ', Thing, '?! Maybe another game?!']).
+
+combo(Object):-
 	position(object(Object, _), _),
 	item_combo(_, Object),
 	speak(['Jolly Roger - You can do the following things with the ', Object, ':']),
 	print_item_combo(Object), !.
-cheat('find combo', Object):-
+combo(Object):-
 	position(object(Object, _), _),
-	speak(['Jolly Roger - You can not really do anything with that! It is just there to make things a bit harder for you!!']), !.
-cheat('find combo', _):-
+	speak(['Jolly Roger - You can not really combine this with anything! Maybe use it alone? Or not at all?!']), !.
+combo(_):-
 	speak(['Jolly Roger - That object does not exist here! Maybe another game?!']).
-cheat('hint'):-
+
+hint:-
 	location(CurrentLocation),
 	room(CurrentLocation, Hint),
 	speak(['Jolly Roger - You are in the ', CurrentLocation, '! ', Hint]).
+
+help:-
+	speak(['Jolly Roger - Help will go here!']).
+
 
 % Auxiliary methods
 % User output
@@ -452,7 +548,7 @@ print_items(Room):-
 print_items(_).
 
 print_adjacent_rooms(Room):-
-	door(Room, AdjacentRoom, Status), tab(4), speak([AdjacentRoom, ' (Door is ', Status, ')']), fail.
+	door(Room, AdjacentRoom, Status, _), tab(4), speak([AdjacentRoom, ' (Door is ', Status, ')']), fail.
 print_adjacent_rooms(_).
 
 print_available_paths(CurrentRoom, TargetRoom):-
@@ -467,7 +563,7 @@ print_path([H|T]):-
 
 print_rooms(Object):-
 	position(object(Object, Size), Room),
-	\+ container(Room, _),
+	\+ container(Room, _, _),
 	write('    '), write(Room), write(' ('), write(Size), write(')'), nl, fail.
 print_rooms(Object):-
 	position(object(Object, Size), Container),
@@ -478,7 +574,9 @@ print_rooms(_).
 print_item_combo(Object):-
 	item_combo(Combination, Object),
 	[Combo|_] = Combination,
-	write('    '), write(Combo), nl, fail.
+	combination(Combo, CombinationList),
+	list_remove(Object, CombinationList, RemainingObjects),
+	write('    '), write(Combo), write(' (you also need: '), write(RemainingObjects), write(')'), nl, fail.
 print_item_combo(_).
 
 % List manipulation
@@ -521,10 +619,10 @@ add_objects_to_location(Container):-
 add_objects_to_location(_).
 
 unlock_door(Room1,Room2):-
-	retract(door(Room1, Room2, locked)),
-	retract(door(Room2, Room1, locked)),
-	asserta(door(Room1, Room2, unlocked)),
-	asserta(door(Room2, Room1, unlocked)).
+	retract(door(Room1, Room2, locked, Key1)),
+	retract(door(Room2, Room1, locked, Key2)),
+	asserta(door(Room1, Room2, unlocked, Key1)),
+	asserta(door(Room2, Room1, unlocked, Key2)).
 
 combine(InventoryList, ItemsList, UpdatedList):-
 	list_match(ItemsList, InventoryList),

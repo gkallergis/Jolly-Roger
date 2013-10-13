@@ -314,7 +314,7 @@ room_entry_action(_).
 room_exists(Room):-
 	room(Room, _).
 room_exists(_):-
-	nl, speak(['There is no such room!']), nl, nl, fail.
+	nl, speak(['There is no such room!']), nl, fail.
 
 door_unlocked(CurrentLocation, Room):-
 	door(CurrentLocation, Room, unlocked, _).

@@ -754,15 +754,6 @@ item_combo(Combination, Item):-
 	combination(Comb, CombinationList),
 	list_check(Item, CombinationList).
 
-possible_combo(Combination):-
-	length(Combination, 1),
-	gen_combination(Combination),
-	is_set(Combination),
-	[Comb|_] = Combination,
-	combination(Comb, CombinationList),
-	inventory(InventoryList),
-	list_match(CombinationList, InventoryList).
-
 gen_combination([]).
 gen_combination([X|Xs]):-
     combination(X, _),

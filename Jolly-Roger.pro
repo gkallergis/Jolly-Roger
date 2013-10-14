@@ -68,6 +68,8 @@ position(object(rope, light), captain).
 % Combinations
 combination('lit candle', [candle, matches]).
 combination('loaded gun', [gun, bullets, 'gun powder']).
+combination('test', [gun, test2]).
+combination('candy', [gun, test2]).
 
 % Extra object/room facts
 edible(banana).
@@ -679,10 +681,9 @@ print_rooms(_).
 
 print_item_combo(Object):-
 	item_combo(Combination, Object),
-	[Combo|_] = Combination,
-	combination(Combo, CombinationList),
+	combination(Combination, CombinationList),
 	list_remove(Object, CombinationList, RemainingObjects),
-	write('    '), write(Combo), write(' (you also need: '), write(RemainingObjects), write(')'), nl, fail.
+	write('    '), write(Combination), write(' (you also need: '), write(RemainingObjects), write(')'), nl, fail.
 print_item_combo(_).
 
 % List manipulation
@@ -747,14 +748,5 @@ find_room_path0(CurrentRoom, TargetRoom, Visited, Path):-
 	find_room_path0(AdjacentRoom, TargetRoom, [AdjacentRoom|Visited], Path).
 
 item_combo(Combination, Item):-
-	length(Combination, 1),
-	gen_combination(Combination),
-	is_set(Combination),
-	[Comb|_] = Combination,
-	combination(Comb, CombinationList),
+	combination(Combination, CombinationList),
 	list_check(Item, CombinationList).
-
-gen_combination([]).
-gen_combination([X|Xs]):-
-    combination(X, _),
-    gen_combination(Xs).

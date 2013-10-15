@@ -1,6 +1,6 @@
 % Jolly Roger
 
-% Logicbae
+% Logicbase
 % Deck rooms
 room(jail, 'Try cutting the rope with the sharp edge on the wall! If you have done so already, try moving on!').
 room(corridor, 'Unlock the chest if you have the key (check at another room maybe?)').
@@ -143,11 +143,14 @@ loop:-
 	execute(OutputList),
 	finished(OutputList), !.
 
+% Execute a command unless the user requests to end the game
 execute([end]):- !.
 execute(OutputList):- 
 	Command =.. OutputList,
 	call(Command), !.
 
+% Prompt for user input and create a list of the entered words
+% removing any special characters used.
 prompt_input(InputList):-
 	ansi_format([bold, fg(green)], '[~w@ship]# ', ['Jolly-Roger']),
 	read_line_to_codes(user_input, UserSentenceASCIICodes),
@@ -155,11 +158,16 @@ prompt_input(InputList):-
 	string_to_atom(FilteredList, Atom),
 	atomic_list_concat(InputList,' ',Atom), !.
 
+% Generate a list containing the predicate and the arguments we need
+% to call as a result of the entered user command. The input list is
+% the list of words which make up the user entered sentence.
 parse_command(InputList, OutputList):-
 	nlp_transformation(OutputList, InputList, []), !.
 parse_command(_, _):-
 	nl, speak(['Jolly Roger - "Dude, what are you talking about?!"']), nl, fail.
 
+% Check if the game is over. The game can end if the user dies, if the user
+% reaches the exit or if the user requests to terminate the game.
 finished(_):-
 	game_over(true),
 	nl, ansi_format([bold, fg(red)], 'Game Over!', []), nl.
@@ -169,6 +177,9 @@ finished(_):-
 finished(InputList):-
 	[end|_] = InputList, !.
 
+% Rule that removes the special characters by checking their ASCII
+% code to be within a specific range. At the end we reverse the list
+% to keep the original order of words before we parse it using NLP.
 remove_special_chars(ASCIIList, FilteredList):-
 	remove_special_chars(ASCIIList, [], RevFilteredList), !,
 	list_reverse(RevFilteredList, FilteredList).
@@ -184,7 +195,10 @@ remove_special_chars([H|T], FilteredList, Acc):-
 remove_special_chars([_|T], FilteredList, Acc):-
 	remove_special_chars(T, FilteredList, Acc).
 
-% NLP
+% NLP - This is the grammar of our game. The transformation will take in
+% The list of words entered by the user and progressively identify them
+% as verbs and nounphrases. The "return" value is the aforementioned list
+% with the predicate name and arguments to execute.
 nlp_transformation([Action, Object]) --> verb(Action), nounphrase(Object).
 nlp_transformation([Action]) --> verb(Action).
 
@@ -235,6 +249,10 @@ det --> [that].
 det --> [the].
 det --> [a].
 
+% To avoid writing a rule for each noun in the game,
+% we use this notation to include all rooms with just
+% one rule. Unfortunatelly, this is not possible to do
+% for double words or more.
 noun(Room) --> [Room], {room(Room, _)}.
 noun('death room') --> [death, room].
 noun('pirate museum') --> [pirate, museum].
@@ -267,7 +285,7 @@ noun('loaded gun') --> [loaded, gun].
 
 
 % Gameplay!
-% Moving around
+% Rule to move the user around the map of the game.
 move(Container):-
 	container(Container, _, _),
 	nl, speak(['Are you out of your mind?! What are you going to do in the ', Container, '?!']), nl, !, fail.
@@ -278,6 +296,8 @@ move(Room):-
 	room_entrance_condition(Room),
 	transit(Room, CurrentLocation).
 
+% Rule that performs the actual transition
+% by updating the logic base
 transit(Room, CurrentLocation):-
 	room_entry_action(Room),
 	retract(location(CurrentLocation)),
@@ -285,6 +305,12 @@ transit(Room, CurrentLocation):-
 	nl, speak(['You walked into the ', Room, '!']),
 	look_around, !.
 
+% To avoid a Java like rule (with predicates that have atmos as arguments)
+% in game logic rules, we only do that to specify the message to show. Another
+% way would be to add this to the room fact as an extra argument but we decided
+% to keep the facts only about the game facts and separate them from the presentation
+% we want to use for the user (as an example of this though, we implemented that in 
+% the hint rule below).
 room_entry_action(tavern):-
 	position(character(pirate, 'deck boy', alive), tavern),
 	retract(position(character(pirate, 'deck boy', alive), tavern)),
@@ -313,11 +339,13 @@ room_entry_action(exit):-
 	nl, speak(['Blackbeard - "Arrrrrrrrrrrrrrrrrrr!!"']), nl.
 room_entry_action(_).
 
+% Rule to check if a room exists in our logic base.
 room_exists(Room):-
 	room(Room, _).
 room_exists(_):-
 	nl, speak(['There is no such room!']), nl, fail.
 
+% A rule to check if the door between two rooms is unlocked.
 door_unlocked(CurrentLocation, Room):-
 	door(CurrentLocation, Room, unlocked, _).
 door_unlocked(CurrentLocation, Room):-
@@ -328,6 +356,9 @@ door_unlocked(CurrentLocation, CurrentLocation):-
 door_unlocked(CurrentLocation, Room):-
 	nl, speak(['You can not get to the ', Room, ' from the ', CurrentLocation, '!']), nl, fail.
 
+% A condition to enter a room. Before entering a room we can mandate some
+% conditions to be true. For example, the user might be required to posses
+% a specific item before entering a room.
 room_entrance_condition(_):-
 	inventory(InventoryList),
 	list_check(rope, InventoryList),
@@ -362,6 +393,7 @@ room_entrance_condition(Room):-
 	nl, speak(['Blackbeard - "It''s too dark in there! I can''t see a thing!"']), nl, !, fail.
 room_entrance_condition(_).
 
+% Rule to check if the user is equiped for a specific situtation.
 equiped(pianist):-
 	clothing(ClothingList),
 	list_check('pirate clothes', ClothingList).
@@ -372,13 +404,16 @@ equiped('deck boy'):-
 	clothing(ClothingList),
 	list_check('pirate skeleton', ClothingList).
 
-% Looking around
+% Rule to check the current room the user is in. A few utility
+% rules are called in the chain to show the items in the room
+% as well as the adjacent rooms to the current one.
 look_around:-
 	location(CurrentLocation),
 	list_room_items(CurrentLocation),
 	speak(['From here you can go to: ']),
 	print_adjacent_rooms(CurrentLocation), nl.
 
+% Rule to list the items inside of a room.
 list_room_items(Room):-
 	position(object(_, _), Room),
 	nl, speak(['In the ', Room, ' you can find: ']),
@@ -387,7 +422,9 @@ list_room_items(_):-
 	nl, speak(['There are no items in this room!']), nl.
 
 
-% Interacting with objects
+% Rule to get an object found in the current room.
+% The object must be light enough to pick and also
+% in the room we are currently in!
 get(Object):-
 	location(CurrentLocation),
 	position(object(Object, light), CurrentLocation),
@@ -404,6 +441,8 @@ get(Object):-
 get(_):-
 	nl, speak(['There is no such object in here!']), nl.
 
+% Rule to put an object down. The object can later be found in the
+% same place it was left at.
 put(Object):-
 	location(CurrentLocation),
 	inventory(OldList),
@@ -415,6 +454,9 @@ put(Object):-
 put(_):-
 	nl, speak(['There is no such object in your inventory!']), nl.
 
+% Rule to inspect an element that can contain other elements.
+% Containers can be locked so the different cases are checked
+% to provide the different actions to take in each.
 inspect(Container):-
 	location(CurrentLocation),
 	position(object(Container, _), CurrentLocation),
@@ -442,6 +484,8 @@ inspect(Name):-
 inspect(_):-
 	nl, speak(['There is no such object in this room!']), nl.
 
+% Rule to cut an object. For example, the rope that holds the user's hands
+% at the beggining of the game. The object is lost forever, once cut off.
 cut(Object):-
 	cutable(Object),
 	inventory(InventoryList),
@@ -453,6 +497,9 @@ cut(Object):-
 cut(Object):-
 	nl, speak(['Blackbeard - "Arrr! I can not cut the ', Object, '!"']), nl.
 
+% Rule to unlock lockable objects. A door or a chest can be such examples
+% and the user needs a specific key to unlock them (specified in the logic
+% base).
 unlock(Container):-
 	container(Container, locked, Key),
 	location(CurrentLocation),
@@ -472,6 +519,8 @@ unlock(Door):-
 unlock(Thing):-
 	nl, speak(['Blackbeard - "Arrr! I can not unlock the ', Thing, '! Are you sure you are next to a locked door?!"']), nl.
 
+% Rule to dress the users with clothing found in the rooms of the game.
+% Double clothing is not allowed (wearing clothes over other clothes).
 dress(Clothing):-
 	wearable(Clothing),
 	clothing(ClothingList),
@@ -504,6 +553,8 @@ dress(Clothing):-
 dress(Object):-
 	nl, speak(['Blackbeard - "Arrr! I can not dress myself with the ', Object, '!"']), nl.
 
+% Rule to remove clothing from the user. The clothing removed
+% cab be later found in the room were it was removed in.
 undress(Clothing):-
 	location(CurrentLocation),
 	clothing(ClothingList),
@@ -516,6 +567,7 @@ undress(Clothing):-
 undress(Object):-
 	nl, speak(['Blackbeard - "Arrr! I can not get this away from me! I am not wearing a ', Object, '!"']), nl.
 
+% Rule to brake the exit. To do so, the user has to have a specific object (i.e. an axe).
 break(exit):-
 	location(lounge),
 	position(character(pirate, pianist, dead), lounge),
@@ -536,6 +588,8 @@ break(exit):-
 break(Object):-
 	nl, speak(['Blackbeard - "Arrr! I can not break the ', Object, '!"']), nl.
 
+% Rule to kill a pirate! The user has to be equiped to do so and the possible
+% weapong that can be used are checked here for existence.
 kill(pirate):-
 	location(CurrentLocation),
 	position(character(pirate, Role, alive), CurrentLocation),
@@ -547,7 +601,7 @@ kill(pirate):-
 kill(Object):-
 	nl, speak(['Blackbeard - "Arrr! I can not kill the ', Object, '!"']), nl.
 
-
+% Rule to bribe a pirate!
 bribe(pirate):-
 	location(CurrentLocation),
 	position(character(pirate, Role, alive), CurrentLocation),
@@ -562,6 +616,8 @@ bribe(pirate):-
 bribe(Object):-
 	nl, speak(['Blackbeard - "Arrr! I can not bribe the ', Object, '!"']), nl.
 
+% Rule to light a candle. This requires a combination of two items which must
+% be in the possetion of the user.
 light(candle):-
 	inventory(InventoryList),
 	combination('lit candle', ItemsList),
@@ -572,6 +628,8 @@ light(candle):-
 light(Object):-
 	nl, speak(['Blackbeard - "Arrr! I can not light the ', Object, '!"']), nl.
 
+% Rule to load a gun. This also requires a set of items to be found in the
+% repository of the user.
 load(gun):-
 	inventory(InventoryList),
 	combination('loaded gun', ItemsList),
@@ -582,6 +640,7 @@ load(gun):-
 load(Object):-
 	nl, speak(['Blackbeard - "Arrr! I can not load the ', Object, '!"']), nl.
 
+% Rule to eat an edible object!
 eat(Edible):-
 	edible(Edible),
 	inventory(InventoryList),
@@ -594,6 +653,8 @@ eat(Object):-
 	nl, speak(['Blackbeard - "Arrr! I can not eat the ', Object, '!"']), nl.
 
 % Cheats!!
+% Rule to find the possible paths from the current room to the requested room and
+% objects in the game.
 find(Room):-
 	location(CurrentRoom),
 	room(Room, _),
@@ -606,6 +667,8 @@ find(Object):-
 find(Thing):-
 	nl, speak(['Jolly Roger - ', Thing, '?! Maybe another game?!']), nl.
 
+% Rule to check what an object can be used for. An object must be available in
+% at least on combo for this rule to succeed.
 combo(Object):-
 	inventory(InventoryList),
 	(position(object(Object, _), _); list_check(Object, InventoryList)),
@@ -618,17 +681,20 @@ combo(Object):-
 combo(_):-
 	nl, speak(['Jolly Roger - That object does not exist here! Maybe another game?!']), nl.
 
-% Misc
+% Rule to show the inventory contents.
 show_inventory:-
 	inventory(InventoryList),
 	nl, speak(['In your inventory you have:']),
 	print_inventory(InventoryList), nl.
 
+% Rule to show a hint for the current room the user is in (as discussed above,
+% this is just showing a message retrieved from the logic base).
 hint:-
 	location(CurrentLocation),
 	room(CurrentLocation, Hint),
 	nl, speak(['Jolly Roger - You are in the ', CurrentLocation, '! ', Hint]), nl.
 
+% Rule to print a simple help message.
 help:-
 	nl, write('To play the game simple imperative sentences can be used.'),nl,
 	write('For example, to go to the corridor room you can say one of the'),nl,
@@ -642,7 +708,8 @@ help:-
 
 
 % Auxiliary methods
-% User output
+% User output. Methods to pretty print lists
+% and other information to the user.
 speak([]):- nl.
 speak([H|T]):- write(H), speak(T).
 
@@ -686,18 +753,22 @@ print_item_combo(Object):-
 	write('    '), write(Combination), write(' (you also need: '), write(RemainingObjects), write(')'), nl, fail.
 print_item_combo(_).
 
-% List manipulation
+% List manipulation - Methods to manipulate lists in the game
+% Rule to check if an item exists in a list.
 list_check(Name, [Name|_]).
 list_check(Name, [_|T]):- list_check(Name, T).
 
+% Rule to check if all the elements of one list can be found in another list.
 list_match([], _).
 list_match([ItemsH|ItemsT], List):-
 	list_check(ItemsH, List),
 	list_match(ItemsT, List).
 
+% Rule to prepend an element in a list.
 list_add(Name, OldList, NewList):-
 	NewList = [Name|OldList].
 
+% Rule to remove a specific element from a list if it exists.
 list_remove(Name, OldList, NewList):-
 	list_check(Name, OldList),
 	list_remove0(Name, OldList, NewList).
@@ -706,18 +777,24 @@ list_remove0(Name, [Name|Rest], Rest).
 list_remove0(Name, [H|Rest], [H|T]):-
 	list_remove0(Name, Rest, T).
 
+% Rule to remove a list of elements from a list.
+% If not all elements can be found in the second list
+% only the ones found are removed.
 list_remove_list([], NewList, NewList).
 list_remove_list([ItemsH|ItemsT], List, UpdatedList):-
 	list_remove(ItemsH, List, NewList),
 	list_remove_list(ItemsT, NewList, UpdatedList).
 
+% Trivial predicate to check for the empty list.
 list_is_empty([]).
 
+% Rule to reverse a list by using an accumulator.
 list_reverse(List, NewList):- list_reverse(List, [], NewList).
 list_reverse([], Acc, Acc).
 list_reverse([H|T], Acc, NewList):- list_reverse(T, [H|Acc], NewList).
 
 % Misc
+% Rule to move objects from one place to another during the game.
 add_objects_to_location(Container):-
 	location(CurrentLocation),
 	position(object(Object, light), Container),
@@ -725,18 +802,25 @@ add_objects_to_location(Container):-
 	retract(position(object(Object, light), Container)), fail.
 add_objects_to_location(_).
 
+% Rule to unlock a door.
 unlock_door(Room1,Room2):-
 	retract(door(Room1, Room2, locked, Key1)),
 	retract(door(Room2, Room1, locked, Key2)),
 	asserta(door(Room1, Room2, unlocked, Key1)),
 	asserta(door(Room2, Room1, unlocked, Key2)).
 
+% Rule to combine items in a list based on facts found in the
+% logic base. The logic base acts as the recipie and the list
+% is updated accordingly.
 combine(InventoryList, ItemsList, UpdatedList):-
 	list_match(ItemsList, InventoryList),
 	list_remove_list(ItemsList, InventoryList, NewInvList),
 	combination(CombinedObj, ItemsList),
 	list_add(CombinedObj, NewInvList, UpdatedList).
 
+% Rule to traverse a simple graph with memory to avoid circular paths.
+% A posible circular path could be in our taver, pirate museum and 
+% heavy metal dark room room arangement.
 find_room_path(CurrentRoom, TargetRoom, FinalPath):-
 	find_room_path0(CurrentRoom, TargetRoom, [CurrentRoom], Path),
 	list_reverse(Path, FinalPath).
@@ -747,6 +831,7 @@ find_room_path0(CurrentRoom, TargetRoom, Visited, Path):-
 	\+ list_check(AdjacentRoom, Visited),
 	find_room_path0(AdjacentRoom, TargetRoom, [AdjacentRoom|Visited], Path).
 
+% Rule to check in what combinations an item can be used in.
 item_combo(Combination, Item):-
 	combination(Combination, CombinationList),
 	list_check(Item, CombinationList).

@@ -68,8 +68,6 @@ position(object(rope, light), captain).
 % Combinations
 combination('lit candle', [candle, matches]).
 combination('loaded gun', [gun, bullets, 'gun powder']).
-combination('test', [gun, test2]).
-combination('candy', [gun, test2]).
 
 % Extra object/room facts
 edible(banana).
